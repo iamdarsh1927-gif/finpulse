@@ -6,19 +6,19 @@ import plotly.graph_objects as go
 from datetime import date
 
 # --- 1. Page Configuration ---
-st.set_page_config(page_title="FinPulse Terminal", page_icon="📈", layout="wide")
+st.set_page_config(page_title="FinPulse Terminal", layout="wide")
 
-st.title("📈 FinPulse Market Terminal")
+st.title("FinPulse Market Terminal")
 st.markdown("Real-time equity dashboard, fundamental analysis, and multi-company comparison.")
 st.divider()
 
-# --- 2. Sidebar Setup (With Auto-.NS Background Logic) ---
+# --- 2. Sidebar Setup ---
 with st.sidebar:
-    st.header("🔍 Market Search")
-    # Users type standard clean names (e.g., TCS, RELIANCE, WAAREERTL)
-    display_ticker = st.text_input("Enter Ticker Symbol:", value="RELIANCE").upper().strip()
+    st.header("Market Search")
     
-    # Silently append .NS behind the scenes for the API request if no dot is present
+    # Removed default value to keep search box clean
+    display_ticker = st.text_input("Enter Ticker Symbol:", value="").upper().strip()
+    
     if display_ticker and "." not in display_ticker:
         ticker_input = f"{display_ticker}.NS"
     else:
@@ -27,21 +27,47 @@ with st.sidebar:
     fetch_button = st.button("Analyze Stock", type="primary", use_container_width=True)
     
     st.divider()
-    st.header("📋 Tracked Watchlist")
-    # Cleaned up visual presentation without .NS text clutter
-    watchlist = ["RELIANCE", "TCS", "HDFCBANK", "WAAREERTL", "NORTHARC"]
-    for w_ticker in watchlist:
-        st.code(w_ticker, language="markdown")
+    st.header("Tracked Watchlist (20+)")
+    st.caption("Reference list of core market assets:")
+    
+    # Upgraded watchlist to show Company Names alongside Tickers
+    watchlist = {
+        "RELIANCE": "Reliance Industries",
+        "WAAREERTL": "Waaree Renewables",
+        "NORTHARC": "Northern Arc Capital",
+        "HDFCBANK": "HDFC Bank",
+        "ICICIBANK": "ICICI Bank",
+        "SBIN": "State Bank of India",
+        "KOTAKBANK": "Kotak Mahindra Bank",
+        "TCS": "Tata Consultancy Services",
+        "INFY": "Infosys",
+        "WIPRO": "Wipro",
+        "HCLTECH": "HCL Technologies",
+        "TATAMOTORS": "Tata Motors",
+        "MARUTI": "Maruti Suzuki",
+        "M&M": "Mahindra & Mahindra",
+        "ITC": "ITC Limited",
+        "HINDUNILVR": "Hindustan Unilever",
+        "ASIANPAINT": "Asian Paints",
+        "LT": "Larsen & Toubro",
+        "BHARTIARTL": "Bharti Airtel",
+        "SUNPHARMA": "Sun Pharma"
+    }
+    
+    for ticker, name in watchlist.items():
+        st.markdown(f"**{ticker}** — *{name}*")
 
 # --- 3. Terminal Navigation Tabs ---
-tab_single, tab_compare = st.tabs(["📊 Single Stock Analysis", "⚖️ Company Comparison"])
+tab_single, tab_compare = st.tabs(["Single Stock Analysis", "Company Comparison"])
 
 # ==========================================
 # TAB 1: SINGLE STOCK ANALYSIS
 # ==========================================
 with tab_single:
-    if fetch_button or ticker_input:
+    # Added safety check: Only run if the search box is not empty
+    if (fetch_button or display_ticker) and display_ticker != "":
         with st.spinner(f"Fetching market metrics for {display_ticker}..."):
+            # Using your live Render backend URL!
             backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
             
             try:
@@ -51,7 +77,7 @@ with tab_single:
                     result = response.json()
                     stock_data = result.get("data", {})
 
-                    st.subheader(f"🏢 {stock_data.get('company_name', display_ticker)} ({display_ticker})")
+                    st.subheader(f"{stock_data.get('company_name', display_ticker)} ({display_ticker})")
                     
                     # Row 1: Primary Valuation Metrics
                     st.markdown("##### **Core Valuation & Market Size**")
@@ -64,9 +90,9 @@ with tab_single:
                     m_col3.metric("P/E Ratio", f"{stock_data.get('pe_ratio', 'N/A')}x" if stock_data.get('pe_ratio') else "N/A")
                     m_col4.metric("Earnings Per Share (EPS)", f"₹{stock_data.get('eps', 'N/A')}")
                     
-                    st.write("") # Structural spacing layout element
+                    st.write("") 
                     
-                    # Row 2: Secondary Trading & Volatility Metrics
+                    # Row 2: Secondary Trading Metrics
                     st.markdown("##### **Session Range & Risk Factors**")
                     sub_col1, sub_col2, sub_col3, sub_col4, sub_col5 = st.columns(5)
                     sub_col1.metric("Day High", f"₹{stock_data.get('day_high', 0.0):,}")
@@ -75,7 +101,7 @@ with tab_single:
                     sub_col4.metric("Dividend Yield", f"{stock_data.get('dividend_yield', 0.0)}%")
                     sub_col5.metric("Beta (Volatility)", f"{stock_data.get('beta', 1.0)}")
                     
-                    st.write("") # Structural spacing layout element
+                    st.write("") 
                     st.markdown("##### **52-Week Range Boundary**")
                     range_col1, range_col2 = st.columns(2)
                     range_col1.metric("52-Week High Target", f"₹{stock_data.get('fifty_two_week_high', 0.0):,}")
@@ -83,8 +109,8 @@ with tab_single:
 
                     st.divider()
 
-                    # Interactive Candlestick Chart Area
-                    st.subheader("📊 Historical Price Actions")
+                    # Interactive Candlestick Chart
+                    st.subheader("Historical Price Actions")
                     dates = pd.date_range(end=date.today(), periods=30)
                     opens, highs, lows, closes = [], [], [], []
                     base_price = current_price
@@ -102,7 +128,7 @@ with tab_single:
                     
                     fig = go.Figure(data=[go.Candlestick(x=dates, open=opens, high=highs, low=lows, close=closes)])
                     fig.update_layout(
-                        xaxis_rangeslider_visible=True, # Maintained interactive timeline slider
+                        xaxis_rangeslider_visible=True,
                         margin=dict(l=10, r=10, t=10, b=10),
                         height=450,
                         template="plotly_dark"
@@ -112,54 +138,56 @@ with tab_single:
                 else:
                     st.error(f"Backend HTTP Connection Error: {response.status_code}")
             except Exception as e:
-                st.error("Could not communicate with FastAPI server pipeline. Is your backend processing requests on Port 8001?")
+                st.error("Could not communicate with FastAPI server pipeline. Ensure your Render backend is live.")
 
 # ==========================================
 # TAB 2: COMPANY COMPARISON
 # ==========================================
 with tab_compare:
-    st.subheader("⚖️ Side-by-Side Asset Comparison")
+    st.subheader("Side-by-Side Asset Comparison")
     st.markdown("Perform head-to-head structural matching across financial dimensions.")
     
     comp_col1, comp_col2 = st.columns(2)
     with comp_col1:
-        t1_raw = st.text_input("First Ticker Symbol:", value="RELIANCE", key="t1").upper().strip()
+        t1_raw = st.text_input("First Ticker Symbol:", value="", key="t1").upper().strip()
         ticker1 = f"{t1_raw}.NS" if t1_raw and "." not in t1_raw else t1_raw
         display_t1 = t1_raw
         
     with comp_col2:
-        t2_raw = st.text_input("Second Ticker Symbol:", value="WAAREERTL", key="t2").upper().strip()
+        t2_raw = st.text_input("Second Ticker Symbol:", value="", key="t2").upper().strip()
         ticker2 = f"{t2_raw}.NS" if t2_raw and "." not in t2_raw else t2_raw
         display_t2 = t2_raw
         
     if st.button("Generate Matrix Comparison", type="primary"):
-        with st.spinner("Processing asset criteria arrays..."):
-            try:
-                res1 = requests.get(f"https://finpulse-sbsu.onrender.com/{ticker1}").json().get("data", {})
-                res2 = requests.get(f"https://finpulse-sbsu.onrender.com/{ticker2}").json().get("data", {})
-                
-                comp_matrix = {
-                    "Analysis Core Fields": [
-                        "Company Legal Identity", "Current Market Valuation Price", "Calculated Market Capitalization",
-                        "Trailing P/E Multiple", "Calculated EPS", "Intraday Performance High", "Intraday Performance Low",
-                        "Trading Volumetric Output", "52-Week Maximum Limit", "52-Week Minimum Support", 
-                        "Allocated Dividend Yield %", "Beta Risk Co-efficient Factor"
-                    ],
-                    display_t1: [
-                        res1.get("company_name", "N/A"), f"₹{res1.get('current_price', 0):,}", f"₹{res1.get('market_cap', 0):,}",
-                        f"{res1.get('pe_ratio', 'N/A')}x", f"₹{res1.get('eps', 'N/A')}", f"₹{res1.get('day_high', 0.0):,}",
-                        f"₹{res1.get('day_low', 0.0):,}", f"{res1.get('volume', 0):,}", f"₹{res1.get('fifty_two_week_high', 0.0):,}",
-                        f"₹{res1.get('fifty_two_week_low', 0.0):,}", f"{res1.get('dividend_yield', 0.0)}%", res1.get("beta", "N/A")
-                    ],
-                    display_t2: [
-                        res2.get("company_name", "N/A"), f"₹{res2.get('current_price', 0):,}", f"₹{res2.get('market_cap', 0):,}",
-                        f"{res2.get('pe_ratio', 'N/A')}x", f"₹{res2.get('eps', 'N/A')}", f"₹{res2.get('day_high', 0.0):,}",
-                        f"₹{res2.get('day_low', 0.0):,}", f"{res2.get('volume', 0):,}", f"₹{res2.get('fifty_two_week_high', 0.0):,}",
-                        f"₹{res2.get('fifty_two_week_low', 0.0):,}", f"{res2.get('dividend_yield', 0.0)}%", res2.get("beta", "N/A")
-                    ]
-                }
-                
-                st.dataframe(pd.DataFrame(comp_matrix), hide_index=True, use_container_width=True)
-                
-            except Exception as e:
-                st.error("Failed executing comparison matrix array mapping. Make sure backend endpoints are listening.")
+        # Added safety check: Only run if both inputs are filled
+        if display_t1 != "" and display_t2 != "":
+            with st.spinner("Processing asset criteria arrays..."):
+                try:
+                    res1 = requests.get(f"https://finpulse-sbsu.onrender.com/stock/{ticker1}").json().get("data", {})
+                    res2 = requests.get(f"https://finpulse-sbsu.onrender.com/stock/{ticker2}").json().get("data", {})
+                    
+                    comp_matrix = {
+                        "Analysis Core Fields": [
+                            "Company Legal Identity", "Current Market Valuation", "Calculated Market Capitalization",
+                            "Trailing P/E Multiple", "Calculated EPS", "Intraday Performance High", "Intraday Performance Low",
+                            "Trading Volumetric Output", "52-Week Maximum Limit", "52-Week Minimum Support", 
+                            "Allocated Dividend Yield %", "Beta Risk Co-efficient Factor"
+                        ],
+                        display_t1: [
+                            res1.get("company_name", "N/A"), f"₹{res1.get('current_price', 0):,}", f"₹{res1.get('market_cap', 0):,}",
+                            f"{res1.get('pe_ratio', 'N/A')}x", f"₹{res1.get('eps', 'N/A')}", f"₹{res1.get('day_high', 0.0):,}",
+                            f"₹{res1.get('day_low', 0.0):,}", f"{res1.get('volume', 0):,}", f"₹{res1.get('fifty_two_week_high', 0.0):,}",
+                            f"₹{res1.get('fifty_two_week_low', 0.0):,}", f"{res1.get('dividend_yield', 0.0)}%", res1.get("beta", "N/A")
+                        ],
+                        display_t2: [
+                            res2.get("company_name", "N/A"), f"₹{res2.get('current_price', 0):,}", f"₹{res2.get('market_cap', 0):,}",
+                            f"{res2.get('pe_ratio', 'N/A')}x", f"₹{res2.get('eps', 'N/A')}", f"₹{res2.get('day_high', 0.0):,}",
+                            f"₹{res2.get('day_low', 0.0):,}", f"{res2.get('volume', 0):,}", f"₹{res2.get('fifty_two_week_high', 0.0):,}",
+                            f"₹{res2.get('fifty_two_week_low', 0.0):,}", f"{res2.get('dividend_yield', 0.0)}%", res2.get("beta", "N/A")
+                        ]
+                    }
+                    
+                    st.dataframe(pd.DataFrame(comp_matrix), hide_index=True, use_container_width=True)
+                    
+                except Exception as e:
+                    st.error("Failed executing comparison matrix array mapping.")
