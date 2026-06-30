@@ -42,7 +42,7 @@ tab_single, tab_compare = st.tabs(["📊 Single Stock Analysis", "⚖️ Company
 with tab_single:
     if fetch_button or ticker_input:
         with st.spinner(f"Fetching market metrics for {display_ticker}..."):
-            backend_url = f"http://127.0.0.1:8001/stock/{ticker_input}"
+            backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
             
             try:
                 response = requests.get(backend_url)
@@ -135,8 +135,8 @@ with tab_compare:
     if st.button("Generate Matrix Comparison", type="primary"):
         with st.spinner("Processing asset criteria arrays..."):
             try:
-                res1 = requests.get(f"http://127.0.0.1:8001/stock/{ticker1}").json().get("data", {})
-                res2 = requests.get(f"http://127.0.0.1:8001/stock/{ticker2}").json().get("data", {})
+                res1 = requests.get(f"https://finpulse-sbsu.onrender.com/{ticker1}").json().get("data", {})
+                res2 = requests.get(f"https://finpulse-sbsu.onrender.com/{ticker2}").json().get("data", {})
                 
                 comp_matrix = {
                     "Analysis Core Fields": [
