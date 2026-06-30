@@ -1,8 +1,9 @@
 import yfinance as yf
+import requests
 import hashlib
 
 def get_deterministic_mock_value(ticker: str, seed_modifier: int, low_bound: float, high_bound: float) -> float:
-    """Generates a consistent, unique mock percentage/value per ticker."""
+    """Generates a consistent mock value as a final fallback."""
     hash_input = f"{ticker}-{seed_modifier}".encode('utf-8')
     hash_val = int(hash_lib := hashlib.md5(hash_input).hexdigest(), 16)
     normalized = (hash_val % 10000) / 10000.0
@@ -10,12 +11,19 @@ def get_deterministic_mock_value(ticker: str, seed_modifier: int, low_bound: flo
 
 def fetch_stock_info(ticker: str) -> dict:
     try:
-        stock = yf.Ticker(ticker)
+        # --- THE STEALTH BYPASS ---
+        # We create a custom session that mimics a real human using Google Chrome
+        session = requests.Session()
+        session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        })
+        
+        # Pass the stealth session into yfinance
+        stock = yf.Ticker(ticker, session=session)
         info = stock.info
         
-        # Raise an exception if yfinance returned empty/blocked data structure
-        if not info or 'regularMarketPrice' not in info and 'currentPrice' not in info:
-            raise Exception("Empty or blocked response structure from yfinance API.")
+        if not info or ('regularMarketPrice' not in info and 'currentPrice' not in info):
+            raise Exception("Empty response. Yahoo may have temporarily hard-blocked the IP.")
 
         return {
             "ticker": ticker,
@@ -34,13 +42,11 @@ def fetch_stock_info(ticker: str) -> dict:
         }
 
     except Exception as e:
-        print(f"Yahoo Finance blocked or failed for '{ticker}'. Falling back to specialized Mock Data.")
+        print(f"Yahoo Finance failed for '{ticker}'. Error: {str(e)}. Falling back to Mock Data.")
         
-        # Anchor base prices closely mapping realistic valuation structures per asset
         base_prices = {"RELIANCE.NS": 1250.0, "WAAREERTL.NS": 1420.0, "NORTHARC.NS": 220.0}
         base_price = base_prices.get(ticker, 500.0)
         
-        # Deterministically generate matching metrics relative to the asset price base
         current_price = base_price * get_deterministic_mock_value(ticker, 1, 0.96, 1.04)
         pe_ratio = get_deterministic_mock_value(ticker, 2, 12.0, 45.0) if "NORTHARC" in ticker or "RELIANCE" in ticker else get_deterministic_mock_value(ticker, 2, 60.0, 95.0)
         
