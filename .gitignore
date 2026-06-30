@@ -1,0 +1,12 @@
+# Ignore the virtual environment folder
+venv/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
+
+# Ignore environment variables (we will use this later for secrets)
+.env
+
+# Ignore SQLite database files (we don't want to push huge data to GitHub)
+*finpulse.db
