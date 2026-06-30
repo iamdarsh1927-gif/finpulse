@@ -1,9 +1,9 @@
-import yfinance as yf
 import requests
+from bs4 import BeautifulSoup
 import hashlib
 
+# Keep the deterministic mock as an absolute final fail-safe
 def get_deterministic_mock_value(ticker: str, seed_modifier: int, low_bound: float, high_bound: float) -> float:
-    """Generates a consistent mock value as a final fallback."""
     hash_input = f"{ticker}-{seed_modifier}".encode('utf-8')
     hash_val = int(hash_lib := hashlib.md5(hash_input).hexdigest(), 16)
     normalized = (hash_val % 10000) / 10000.0
@@ -11,39 +11,86 @@ def get_deterministic_mock_value(ticker: str, seed_modifier: int, low_bound: flo
 
 def fetch_stock_info(ticker: str) -> dict:
     try:
-        # --- THE STEALTH BYPASS ---
-        # We create a custom session that mimics a real human using Google Chrome
-        session = requests.Session()
-        session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        })
+        # 1. Switch target to Google Finance
+        symbol = ticker.replace(".NS", "")
+        url = f"https://www.google.com/finance/quote/{symbol}:NSE"
         
-        # Pass the stealth session into yfinance
-        stock = yf.Ticker(ticker, session=session)
-        info = stock.info
+        # 2. Mimic a standard Windows Chrome Browser
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
         
-        if not info or ('regularMarketPrice' not in info and 'currentPrice' not in info):
-            raise Exception("Empty response. Yahoo may have temporarily hard-blocked the IP.")
+        # 3. Fetch the raw website code
+        response = requests.get(url, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            raise Exception(f"Google Finance returned {response.status_code}")
+            
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 4. Extract Company Name
+        name_div = soup.find('div', class_='zzDege')
+        company_name = name_div.text.strip() if name_div else symbol
+        
+        # 5. Extract Current Price
+        price_div = soup.find('div', class_='YMlKec fxKbKc')
+        if not price_div:
+            raise Exception("Price not found. Ticker may be invalid.")
+            
+        def clean_num(text):
+            # Removes currency symbols/commas, converts abbreviations (T, B, M, K) into real numbers
+            text = text.replace('₹', '').replace('$', '').replace(',', '').strip()
+            if text == '-' or not text: return 0.0
+            mult = 1
+            if text.endswith('T'): mult = 1e12; text = text[:-1]
+            elif text.endswith('B'): mult = 1e9; text = text[:-1]
+            elif text.endswith('M'): mult = 1e6; text = text[:-1]
+            elif text.endswith('K'): mult = 1e3; text = text[:-1]
+            try: return float(text) * mult
+            except: return 0.0
 
+        current_price = clean_num(price_div.text)
+        
+        # 6. Extract all available fundamental stats from the Google grid
+        stats = {}
+        for item in soup.find_all('div', class_='gyFHrc'):
+            label = item.find('div', class_='mfs7Pt')
+            value = item.find('div', class_='P6K39c')
+            if label and value:
+                stats[label.text.strip()] = value.text.strip()
+                
+        # 7. Safely parse ranges
+        day_parts = stats.get("Day range", "0 - 0").split('-')
+        day_low = clean_num(day_parts[0])
+        day_high = clean_num(day_parts[1]) if len(day_parts) > 1 else day_low
+        
+        year_parts = stats.get("Year range", "0 - 0").split('-')
+        wk52_low = clean_num(year_parts[0])
+        wk52_high = clean_num(year_parts[1]) if len(year_parts) > 1 else wk52_low
+        
+        pe_ratio = clean_num(stats.get("P/E ratio", "0"))
+        
         return {
             "ticker": ticker,
-            "company_name": info.get("longName", ticker),
-            "current_price": info.get("currentPrice") or info.get("regularMarketPrice", 0.0),
-            "market_cap": info.get("marketCap", 0),
-            "pe_ratio": info.get("trailingPE") or info.get("forwardPE", 0.0),
-            "eps": info.get("trailingEps", 0.0),
-            "day_high": info.get("dayHigh", 0.0),
-            "day_low": info.get("dayLow", 0.0),
-            "volume": info.get("volume", 0),
-            "fifty_two_week_high": info.get("fiftyTwoWeekHigh", 0.0),
-            "fifty_two_week_low": info.get("fiftyTwoWeekLow", 0.0),
-            "dividend_yield": info.get("dividendYield", 0.0) * 100 if info.get("dividendYield") else 0.0,
-            "beta": info.get("beta", 1.0)
+            "company_name": company_name,
+            "current_price": current_price,
+            "market_cap": clean_num(stats.get("Market cap", "0")),
+            "pe_ratio": pe_ratio,
+            "eps": round(current_price / pe_ratio, 2) if pe_ratio > 0 else 0.0,
+            "day_high": day_high,
+            "day_low": day_low,
+            "volume": int(clean_num(stats.get("Volume", "0"))),
+            "fifty_two_week_high": wk52_high,
+            "fifty_two_week_low": wk52_low,
+            "dividend_yield": clean_num(stats.get("Dividend yield", "0%").replace('%', '')),
+            "beta": get_deterministic_mock_value(ticker, 6, 0.6, 1.6) # Google doesn't display Beta, use fallback
         }
 
     except Exception as e:
-        print(f"Yahoo Finance failed for '{ticker}'. Error: {str(e)}. Falling back to Mock Data.")
+        print(f"Scraper failed for '{ticker}': {e}. Falling back to Mock Data.")
         
+        # --- The Absolute Final Fallback ---
         base_prices = {"RELIANCE.NS": 1250.0, "WAAREERTL.NS": 1420.0, "NORTHARC.NS": 220.0}
         base_price = base_prices.get(ticker, 500.0)
         
