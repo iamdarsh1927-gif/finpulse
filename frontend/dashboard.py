@@ -35,7 +35,7 @@ with st.sidebar:
     fetch_button = st.button("Analyze Stock", type="primary", use_container_width=True)
     
     st.divider()
-    st.header("Watchlist")
+    st.header("Dynamic Watchlist")
     st.caption("Active session asset tracking:")
     
     # Render dynamic watchlist with inline delete buttons
@@ -53,7 +53,7 @@ with st.sidebar:
     
     # --- Clean Inline Add Tool ---
     with st.expander("+ Add New Asset"):
-        new_ticker = st.text_input("Ticker Symbol ", key="add_t").upper().strip()
+        new_ticker = st.text_input("Ticker Symbol (e.g. ZOMATO):", key="add_t").upper().strip()
         new_name = st.text_input("Company Name:", key="add_n").strip()
         
         if st.button("Add to Watchlist", use_container_width=True):
@@ -73,8 +73,8 @@ tab_single, tab_compare = st.tabs(["Single Stock Analysis", "Company Comparison"
 with tab_single:
     if (fetch_button or display_ticker) and display_ticker != "":
         with st.spinner(f"Fetching market metrics for {display_ticker}..."):
-            # Swap to your Render URL (https://finpulse-sbsu.onrender.com/stock/...) when deploying!
-           backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
+            # Pointing directly to your live Render backend
+            backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
             
             try:
                 response = requests.get(backend_url)
@@ -173,8 +173,8 @@ with tab_compare:
         if display_t1 != "" and display_t2 != "":
             with st.spinner("Processing asset criteria arrays..."):
                 try:
-                    res1 = requests.get(f"http://127.0.0.1:8001/stock/{ticker1}").json().get("data", {})
-                    res2 = requests.get(f"http://127.0.0.1:8001/stock/{ticker2}").json().get("data", {})
+                    res1 = requests.get(f"https://finpulse-sbsu.onrender.com/stock/{ticker1}").json().get("data", {})
+                    res2 = requests.get(f"https://finpulse-sbsu.onrender.com/stock/{ticker2}").json().get("data", {})
                     
                     mc1_crores = res1.get('market_cap', 0) / 10000000
                     mc2_crores = res2.get('market_cap', 0) / 10000000
