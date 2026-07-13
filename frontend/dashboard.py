@@ -12,7 +12,54 @@ st.title("FinPulse Market Terminal")
 st.markdown("Real-time equity dashboard, fundamental analysis, and multi-company comparison.")
 st.divider()
 
-# --- 2. Initialize Dynamic Session State Watchlist ---
+# --- 2. Institutional Table Styling Helper ---
+def render_styled_ledger(data_list):
+    """Transforms raw dictionary lists into Bloomberg-style financial ledgers"""
+    if not data_list:
+        st.info("Statement currently unavailable.")
+        return
+        
+    df = pd.DataFrame(data_list)
+    year_cols = [col for col in df.columns if col != "Accounting Metric"]
+    
+    # 1. Apply typography: Left-align labels, Right-align monospace numbers
+    styler = df.style\
+        .set_properties(subset=["Accounting Metric"], **{
+            'text-align': 'left', 
+            'font-weight': '600'
+        })\
+        .set_properties(subset=year_cols, **{
+            'text-align': 'right', 
+            'font-family': 'Consolas, monospace',
+            'font-size': '14px'
+        })
+        
+    # 2. Apply theme-agnostic highlighting to headline financial totals
+    def highlight_headline_metrics(row):
+        metric = str(row["Accounting Metric"]).lower()
+        headline_terms = [
+            "sales", "revenue", "operating profit", "net profit", 
+            "total liabilities", "total assets", "total borrowings", 
+            "net cash flow", "operating activity"
+        ]
+        if any(term in metric for term in headline_terms):
+            # Creates a subtle bold highlight bar across the entire row
+            return ['background-color: rgba(128, 128, 128, 0.15); font-weight: 700;' for _ in row]
+        return ['' for _ in row]
+        
+    styler.apply(highlight_headline_metrics, axis=1)
+    
+    # 3. Dynamic height calculation to eliminate awkward inner scrollbars
+    calc_height = (len(df) * 38) + 42
+    
+    st.dataframe(
+        styler, 
+        hide_index=True, 
+        use_container_width=True,
+        height=calc_height
+    )
+
+# --- 3. Initialize Dynamic Session State Watchlist ---
 if 'watchlist' not in st.session_state:
     st.session_state.watchlist = {
         "RELIANCE": "Reliance Industries",
@@ -21,7 +68,7 @@ if 'watchlist' not in st.session_state:
         "TATAMOTORS": "Tata Motors"
     }
 
-# --- 3. Sidebar Setup ---
+# --- 4. Sidebar Setup ---
 with st.sidebar:
     st.header("Market Search")
     
@@ -62,7 +109,7 @@ with st.sidebar:
             else:
                 st.warning("Please provide both Ticker and Name.")
 
-# --- 4. Terminal Navigation Tabs ---
+# --- 5. Terminal Navigation Tabs ---
 tab_single, tab_compare, tab_stmts = st.tabs(["Single Stock Analysis", "Company Comparison", "Financial Statements"])
 
 # ==========================================
@@ -218,7 +265,6 @@ with tab_stmts:
                     st.markdown(f"#### **{stock_data.get('company_name', display_ticker)}** | *{display_ticker}*")
                     st.write("")
                     
-                    # Sleek segmented selector for institutional aesthetics
                     stmt_choice = st.radio(
                         "Select Ledger View:", 
                         ["Income Statement (P&L)", "Balance Sheet", "Cash Flow Statement"], 
@@ -226,26 +272,16 @@ with tab_stmts:
                     )
                     st.write("")
                     
+                    # Apply institutional rendering to chosen ledger
                     if stmt_choice == "Income Statement (P&L)":
-                        inc_data = stmts.get("income_statement", [])
-                        if inc_data:
-                            st.dataframe(pd.DataFrame(inc_data), hide_index=True, use_container_width=True)
-                        else:
-                            st.info("Income statement currently unavailable.")
-                            
+                        render_styled_ledger(stmts.get("income_statement", []))
                     elif stmt_choice == "Balance Sheet":
-                        bal_data = stmts.get("balance_sheet", [])
-                        if bal_data:
-                            st.dataframe(pd.DataFrame(bal_data), hide_index=True, use_container_width=True)
-                        else:
-                            st.info("Balance sheet currently unavailable.")
-                            
+                        render_styled_ledger(stmts.get("balance_sheet", []))
                     elif stmt_choice == "Cash Flow Statement":
-                        csh_data = stmts.get("cash_flow", [])
-                        if csh_data:
-                            st.dataframe(pd.DataFrame(csh_data), hide_index=True, use_container_width=True)
-                        else:
-                            st.info("Cash flow statement currently unavailable.")
+                        render_styled_ledger(stmts.get("cash_flow", []))
+                            
+                    st.write("")
+                    st.caption("ℹ️ **Note:** All monetary figures are reported in **Indian Rupees Crores (₹ Cr)** unless indicated as a percentage (%), ratio, or per-share metric.")
                 else:
                     st.error(f"Backend HTTP Connection Error: {response.status_code}")
             except Exception as e:
