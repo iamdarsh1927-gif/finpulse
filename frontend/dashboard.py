@@ -38,7 +38,6 @@ with st.sidebar:
     st.header("Dynamic Watchlist")
     st.caption("Active session asset tracking:")
     
-    # Render dynamic watchlist with inline delete buttons
     if st.session_state.watchlist:
         for ticker, name in list(st.session_state.watchlist.items()):
             col1, col2 = st.columns([0.8, 0.2])
@@ -51,7 +50,6 @@ with st.sidebar:
         
     st.write("")
     
-    # --- Clean Inline Add Tool ---
     with st.expander("+ Add New Asset"):
         new_ticker = st.text_input("Ticker Symbol (e.g. ZOMATO):", key="add_t").upper().strip()
         new_name = st.text_input("Company Name:", key="add_n").strip()
@@ -65,7 +63,7 @@ with st.sidebar:
                 st.warning("Please provide both Ticker and Name.")
 
 # --- 4. Terminal Navigation Tabs ---
-tab_single, tab_compare = st.tabs(["Single Stock Analysis", "Company Comparison"])
+tab_single, tab_compare, tab_stmts = st.tabs(["Single Stock Analysis", "Company Comparison", "Financial Statements"])
 
 # ==========================================
 # TAB 1: SINGLE STOCK ANALYSIS
@@ -73,7 +71,6 @@ tab_single, tab_compare = st.tabs(["Single Stock Analysis", "Company Comparison"
 with tab_single:
     if (fetch_button or display_ticker) and display_ticker != "":
         with st.spinner(f"Fetching market metrics for {display_ticker}..."):
-            # Pointing directly to your live Render backend
             backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
             
             try:
@@ -85,14 +82,12 @@ with tab_single:
 
                     st.subheader(f"{stock_data.get('company_name', display_ticker)} ({display_ticker})")
                     
-                    # Row 1: Primary Valuation Metrics
                     st.markdown("##### Core Valuation & Market Size")
                     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
                     
                     current_price = stock_data.get('current_price', 0.0)
                     mock_change = round(np.random.uniform(-2.5, 2.5), 2)
                     
-                    # Convert raw bytes back to Crores for clean UI formatting
                     raw_mc = stock_data.get('market_cap', 0)
                     mc_crores = raw_mc / 10000000 
                     
@@ -103,7 +98,6 @@ with tab_single:
                     
                     st.write("") 
                     
-                    # Row 2: Secondary Trading Metrics
                     st.markdown("##### Session Range & Risk Factors")
                     sub_col1, sub_col2, sub_col3, sub_col4, sub_col5 = st.columns(5)
                     sub_col1.metric("Day High", f"₹{stock_data.get('day_high', 0.0):,}")
@@ -120,7 +114,6 @@ with tab_single:
 
                     st.divider()
 
-                    # Interactive Candlestick Chart
                     st.subheader("Historical Price Actions")
                     dates = pd.date_range(end=date.today(), periods=30)
                     opens, highs, lows, closes = [], [], [], []
@@ -204,3 +197,58 @@ with tab_compare:
                     
                 except Exception as e:
                     st.error("Failed executing comparison matrix array mapping.")
+
+# ==========================================
+# TAB 3: FINANCIAL STATEMENTS
+# ==========================================
+with tab_stmts:
+    st.subheader("Core Accounting & Audit Statements")
+    st.markdown("Annual consolidated ledger analysis across Profit & Loss, Balance Sheet, and Cash Flows.")
+    
+    if (fetch_button or display_ticker) and display_ticker != "":
+        with st.spinner(f"Extracting accounting ledgers for {display_ticker}..."):
+            backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
+            try:
+                response = requests.get(backend_url)
+                if response.status_code == 200:
+                    result = response.json()
+                    stock_data = result.get("data", {})
+                    stmts = stock_data.get("financial_statements", {})
+                    
+                    st.markdown(f"#### **{stock_data.get('company_name', display_ticker)}** | *{display_ticker}*")
+                    st.write("")
+                    
+                    # Sleek segmented selector for institutional aesthetics
+                    stmt_choice = st.radio(
+                        "Select Ledger View:", 
+                        ["Income Statement (P&L)", "Balance Sheet", "Cash Flow Statement"], 
+                        horizontal=True
+                    )
+                    st.write("")
+                    
+                    if stmt_choice == "Income Statement (P&L)":
+                        inc_data = stmts.get("income_statement", [])
+                        if inc_data:
+                            st.dataframe(pd.DataFrame(inc_data), hide_index=True, use_container_width=True)
+                        else:
+                            st.info("Income statement currently unavailable.")
+                            
+                    elif stmt_choice == "Balance Sheet":
+                        bal_data = stmts.get("balance_sheet", [])
+                        if bal_data:
+                            st.dataframe(pd.DataFrame(bal_data), hide_index=True, use_container_width=True)
+                        else:
+                            st.info("Balance sheet currently unavailable.")
+                            
+                    elif stmt_choice == "Cash Flow Statement":
+                        csh_data = stmts.get("cash_flow", [])
+                        if csh_data:
+                            st.dataframe(pd.DataFrame(csh_data), hide_index=True, use_container_width=True)
+                        else:
+                            st.info("Cash flow statement currently unavailable.")
+                else:
+                    st.error(f"Backend HTTP Connection Error: {response.status_code}")
+            except Exception as e:
+                st.error("Could not communicate with FastAPI server pipeline.")
+    else:
+        st.info("Enter a Ticker Symbol in the sidebar (e.g., RELIANCE or TCS) and click Analyze Stock to view accounting statements.")
