@@ -74,7 +74,7 @@ with tab_single:
     if (fetch_button or display_ticker) and display_ticker != "":
         with st.spinner(f"Fetching market metrics for {display_ticker}..."):
             # Swap to your Render URL (https://finpulse-sbsu.onrender.com/stock/...) when deploying!
-            backend_url = f"http://127.0.0.1:8001/stock/{ticker_input}"
+           backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
             
             try:
                 response = requests.get(backend_url)
