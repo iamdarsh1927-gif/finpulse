@@ -12,11 +12,19 @@ st.title("FinPulse Market Terminal")
 st.markdown("Real-time equity dashboard, fundamental analysis, and multi-company comparison.")
 st.divider()
 
-# --- 2. Sidebar Setup ---
+# --- 2. Initialize Dynamic Session State Watchlist ---
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = {
+        "RELIANCE": "Reliance Industries",
+        "TCS": "Tata Consultancy Services",
+        "HDFCBANK": "HDFC Bank",
+        "TATAMOTORS": "Tata Motors"
+    }
+
+# --- 3. Sidebar Setup ---
 with st.sidebar:
     st.header("Market Search")
     
-    # Removed default value to keep search box clean
     display_ticker = st.text_input("Enter Ticker Symbol:", value="").upper().strip()
     
     if display_ticker and "." not in display_ticker:
@@ -27,48 +35,46 @@ with st.sidebar:
     fetch_button = st.button("Analyze Stock", type="primary", use_container_width=True)
     
     st.divider()
-    st.header("Tracked Watchlist (20+)")
-    st.caption("Reference list of core market assets:")
+    st.header("Watchlist")
+    st.caption("Active session asset tracking:")
     
-    # Upgraded watchlist to show Company Names alongside Tickers
-    watchlist = {
-        "RELIANCE": "Reliance Industries",
-        "WAAREERTL": "Waaree Renewables",
-        "NORTHARC": "Northern Arc Capital",
-        "HDFCBANK": "HDFC Bank",
-        "ICICIBANK": "ICICI Bank",
-        "SBIN": "State Bank of India",
-        "KOTAKBANK": "Kotak Mahindra Bank",
-        "TCS": "Tata Consultancy Services",
-        "INFY": "Infosys",
-        "WIPRO": "Wipro",
-        "HCLTECH": "HCL Technologies",
-        "TATAMOTORS": "Tata Motors",
-        "MARUTI": "Maruti Suzuki",
-        "M&M": "Mahindra & Mahindra",
-        "ITC": "ITC Limited",
-        "HINDUNILVR": "Hindustan Unilever",
-        "ASIANPAINT": "Asian Paints",
-        "LT": "Larsen & Toubro",
-        "BHARTIARTL": "Bharti Airtel",
-        "SUNPHARMA": "Sun Pharma"
-    }
+    # Render dynamic watchlist with inline delete buttons
+    if st.session_state.watchlist:
+        for ticker, name in list(st.session_state.watchlist.items()):
+            col1, col2 = st.columns([0.8, 0.2])
+            col1.markdown(f"**{ticker}** | *{name}*")
+            if col2.button("X", key=f"del_{ticker}", help=f"Remove {ticker}"):
+                del st.session_state.watchlist[ticker]
+                st.rerun()
+    else:
+        st.caption("Watchlist is currently empty.")
+        
+    st.write("")
     
-    for ticker, name in watchlist.items():
-        st.markdown(f"**{ticker}** — *{name}*")
+    # --- Clean Inline Add Tool ---
+    with st.expander("+ Add New Asset"):
+        new_ticker = st.text_input("Ticker Symbol ", key="add_t").upper().strip()
+        new_name = st.text_input("Company Name:", key="add_n").strip()
+        
+        if st.button("Add to Watchlist", use_container_width=True):
+            if new_ticker and new_name:
+                clean_ticker = new_ticker.replace(".NS", "")
+                st.session_state.watchlist[clean_ticker] = new_name
+                st.rerun()
+            else:
+                st.warning("Please provide both Ticker and Name.")
 
-# --- 3. Terminal Navigation Tabs ---
+# --- 4. Terminal Navigation Tabs ---
 tab_single, tab_compare = st.tabs(["Single Stock Analysis", "Company Comparison"])
 
 # ==========================================
 # TAB 1: SINGLE STOCK ANALYSIS
 # ==========================================
 with tab_single:
-    # Added safety check: Only run if the search box is not empty
     if (fetch_button or display_ticker) and display_ticker != "":
         with st.spinner(f"Fetching market metrics for {display_ticker}..."):
-            # Using your live Render backend URL!
-            backend_url = f"https://finpulse-sbsu.onrender.com/stock/{ticker_input}"
+            # Swap to your Render URL (https://finpulse-sbsu.onrender.com/stock/...) when deploying!
+            backend_url = f"http://127.0.0.1:8001/stock/{ticker_input}"
             
             try:
                 response = requests.get(backend_url)
@@ -80,20 +86,25 @@ with tab_single:
                     st.subheader(f"{stock_data.get('company_name', display_ticker)} ({display_ticker})")
                     
                     # Row 1: Primary Valuation Metrics
-                    st.markdown("##### **Core Valuation & Market Size**")
+                    st.markdown("##### Core Valuation & Market Size")
                     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                    
                     current_price = stock_data.get('current_price', 0.0)
                     mock_change = round(np.random.uniform(-2.5, 2.5), 2)
                     
+                    # Convert raw bytes back to Crores for clean UI formatting
+                    raw_mc = stock_data.get('market_cap', 0)
+                    mc_crores = raw_mc / 10000000 
+                    
                     m_col1.metric("Current Price", f"₹{current_price:,}", f"{mock_change}%")
-                    m_col2.metric("Market Capitalization", f"₹{stock_data.get('market_cap', 0):,}")
+                    m_col2.metric("Market Capitalization", f"₹{mc_crores:,.2f} Cr")
                     m_col3.metric("P/E Ratio", f"{stock_data.get('pe_ratio', 'N/A')}x" if stock_data.get('pe_ratio') else "N/A")
                     m_col4.metric("Earnings Per Share (EPS)", f"₹{stock_data.get('eps', 'N/A')}")
                     
                     st.write("") 
                     
                     # Row 2: Secondary Trading Metrics
-                    st.markdown("##### **Session Range & Risk Factors**")
+                    st.markdown("##### Session Range & Risk Factors")
                     sub_col1, sub_col2, sub_col3, sub_col4, sub_col5 = st.columns(5)
                     sub_col1.metric("Day High", f"₹{stock_data.get('day_high', 0.0):,}")
                     sub_col2.metric("Day Low", f"₹{stock_data.get('day_low', 0.0):,}")
@@ -102,7 +113,7 @@ with tab_single:
                     sub_col5.metric("Beta (Volatility)", f"{stock_data.get('beta', 1.0)}")
                     
                     st.write("") 
-                    st.markdown("##### **52-Week Range Boundary**")
+                    st.markdown("##### 52-Week Range Boundary")
                     range_col1, range_col2 = st.columns(2)
                     range_col1.metric("52-Week High Target", f"₹{stock_data.get('fifty_two_week_high', 0.0):,}")
                     range_col2.metric("52-Week Low Floor", f"₹{stock_data.get('fifty_two_week_low', 0.0):,}")
@@ -138,7 +149,7 @@ with tab_single:
                 else:
                     st.error(f"Backend HTTP Connection Error: {response.status_code}")
             except Exception as e:
-                st.error("Could not communicate with FastAPI server pipeline. Ensure your Render backend is live.")
+                st.error("Could not communicate with FastAPI server pipeline. Ensure your backend is live.")
 
 # ==========================================
 # TAB 2: COMPANY COMPARISON
@@ -159,12 +170,14 @@ with tab_compare:
         display_t2 = t2_raw
         
     if st.button("Generate Matrix Comparison", type="primary"):
-        # Added safety check: Only run if both inputs are filled
         if display_t1 != "" and display_t2 != "":
             with st.spinner("Processing asset criteria arrays..."):
                 try:
-                    res1 = requests.get(f"https://finpulse-sbsu.onrender.com/stock/{ticker1}").json().get("data", {})
-                    res2 = requests.get(f"https://finpulse-sbsu.onrender.com/stock/{ticker2}").json().get("data", {})
+                    res1 = requests.get(f"http://127.0.0.1:8001/stock/{ticker1}").json().get("data", {})
+                    res2 = requests.get(f"http://127.0.0.1:8001/stock/{ticker2}").json().get("data", {})
+                    
+                    mc1_crores = res1.get('market_cap', 0) / 10000000
+                    mc2_crores = res2.get('market_cap', 0) / 10000000
                     
                     comp_matrix = {
                         "Analysis Core Fields": [
@@ -174,13 +187,13 @@ with tab_compare:
                             "Allocated Dividend Yield %", "Beta Risk Co-efficient Factor"
                         ],
                         display_t1: [
-                            res1.get("company_name", "N/A"), f"₹{res1.get('current_price', 0):,}", f"₹{res1.get('market_cap', 0):,}",
+                            res1.get("company_name", "N/A"), f"₹{res1.get('current_price', 0):,}", f"₹{mc1_crores:,.2f} Cr",
                             f"{res1.get('pe_ratio', 'N/A')}x", f"₹{res1.get('eps', 'N/A')}", f"₹{res1.get('day_high', 0.0):,}",
                             f"₹{res1.get('day_low', 0.0):,}", f"{res1.get('volume', 0):,}", f"₹{res1.get('fifty_two_week_high', 0.0):,}",
                             f"₹{res1.get('fifty_two_week_low', 0.0):,}", f"{res1.get('dividend_yield', 0.0)}%", res1.get("beta", "N/A")
                         ],
                         display_t2: [
-                            res2.get("company_name", "N/A"), f"₹{res2.get('current_price', 0):,}", f"₹{res2.get('market_cap', 0):,}",
+                            res2.get("company_name", "N/A"), f"₹{res2.get('current_price', 0):,}", f"₹{mc2_crores:,.2f} Cr",
                             f"{res2.get('pe_ratio', 'N/A')}x", f"₹{res2.get('eps', 'N/A')}", f"₹{res2.get('day_high', 0.0):,}",
                             f"₹{res2.get('day_low', 0.0):,}", f"{res2.get('volume', 0):,}", f"₹{res2.get('fifty_two_week_high', 0.0):,}",
                             f"₹{res2.get('fifty_two_week_low', 0.0):,}", f"{res2.get('dividend_yield', 0.0)}%", res2.get("beta", "N/A")
