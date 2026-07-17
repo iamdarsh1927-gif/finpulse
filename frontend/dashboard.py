@@ -69,15 +69,54 @@ if 'watchlist' not in st.session_state:
     }
 
 # --- 4. Sidebar Setup ---
+# --- 4. Sidebar Setup ---
 with st.sidebar:
+    # 1. Master Stock Directory (Shared by both Market Search & Add to Watchlist)
+    # You can add as many NSE/BSE companies here as you want!
+    NSE_DIRECTORY = {
+        "RELIANCE": "Reliance Industries Ltd",
+        "TCS": "Tata Consultancy Services",
+        "HDFCBANK": "HDFC Bank Ltd",
+        "INFY": "Infosys Ltd",
+        "ICICIBANK": "ICICI Bank Ltd",
+        "HINDUNILVR": "Hindustan Unilever Ltd",
+        "SBIN": "State Bank of India",
+        "BHARTIARTL": "Bharti Airtel Ltd",
+        "ITC": "ITC Ltd",
+        "KOTAKBANK": "Kotak Mahindra Bank",
+        "LT": "Larsen & Toubro Ltd",
+        "TATAMOTORS": "Tata Motors Ltd",
+        "AXISBANK": "Axis Bank Ltd",
+        "ADANIENT": "Adani Enterprises",
+        "MARUTI": "Maruti Suzuki India",
+        "SUNPHARMA": "Sun Pharmaceutical",
+        "TITAN": "Titan Company Ltd",
+        "BAJFINANCE": "Bajaj Finance Ltd",
+        "WIPRO": "Wipro Ltd",
+        "ZOMATO": "Zomato Ltd",
+        "WAAREERTL": "Waaree Renewable Technologies",
+        "NORTHARC": "Northern Arc Capital"
+    }
+    
+    # Format into searchable strings: "RELIANCE | Reliance Industries Ltd"
+    search_options = [f"{ticker} | {name}" for ticker, name in NSE_DIRECTORY.items()]
+
     st.header("Market Search")
     
-    display_ticker = st.text_input("Enter Ticker Symbol:", value="").upper().strip()
+    # Market Search Autocomplete Box
+    selected_option = st.selectbox(
+        "Search Company or Ticker:",
+        options=search_options,
+        index=None,  # Keeps box empty by default
+        placeholder="Type company name (e.g. Tata, HDFC)..."
+    )
     
-    if display_ticker and "." not in display_ticker:
+    if selected_option:
+        display_ticker = selected_option.split(" | ")[0]
         ticker_input = f"{display_ticker}.NS"
     else:
-        ticker_input = display_ticker
+        display_ticker = ""
+        ticker_input = ""
         
     fetch_button = st.button("Analyze Stock", type="primary", use_container_width=True)
     
@@ -98,17 +137,27 @@ with st.sidebar:
     st.write("")
     
     with st.expander("+ Add New Asset"):
-        new_ticker = st.text_input("Ticker Symbol (e.g. ZOMATO):", key="add_t").upper().strip()
-        new_name = st.text_input("Company Name:", key="add_n").strip()
+        # Watchlist Autocomplete Box (Reuses the same search_options!)
+        selected_add = st.selectbox(
+            "Search & Select Company to Add:",
+            options=search_options,
+            index=None,
+            placeholder="Type name to add...",
+            key="add_asset_select"
+        )
         
         if st.button("Add to Watchlist", use_container_width=True):
-            if new_ticker and new_name:
-                clean_ticker = new_ticker.replace(".NS", "")
-                st.session_state.watchlist[clean_ticker] = new_name
+            if selected_add:
+                # Automatically split "TICKER | Company Name" into separate variables
+                parts = selected_add.split(" | ")
+                clean_ticker = parts[0]
+                clean_name = parts[1]
+                
+                # Save into session state and reload UI
+                st.session_state.watchlist[clean_ticker] = clean_name
                 st.rerun()
             else:
-                st.warning("Please provide both Ticker and Name.")
-
+                st.warning("Please select a company from the list.")
 # --- 5. Terminal Navigation Tabs ---
 tab_single, tab_compare, tab_stmts = st.tabs(["Single Stock Analysis", "Company Comparison", "Financial Statements"])
 
