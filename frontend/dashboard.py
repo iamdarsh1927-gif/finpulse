@@ -12,7 +12,30 @@ st.title("FinPulse Market Terminal")
 st.markdown("Real-time equity dashboard, fundamental analysis, and multi-company comparison.")
 st.divider()
 
-# --- 2. Institutional Table Styling Helper ---
+# --- 2. Helper Functions (Styling & Live API Search Engine) ---
+@st.cache_data(show_spinner=False, ttl=600)
+def fetch_live_suggestions(query: str):
+    """Queries Yahoo Finance Live Search API for dynamic, real-time stock autocomplete"""
+    if not query or len(query.strip()) < 2:
+        return []
+        
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=12&newsCount=0"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+    try:
+        res = requests.get(url, headers=headers, timeout=5).json()
+        quotes = res.get("quotes", [])
+        results = []
+        for q in quotes:
+            # Filter to only show actual tradable equities, ETFs, or Mutual Funds
+            if q.get("quoteType") in ["EQUITY", "ETF", "MUTUALFUND", "INDEX"]:
+                sym = q.get("symbol", "")
+                name = q.get("shortname") or q.get("longname") or sym
+                exch = q.get("exchDisp", "Market")
+                results.append(f"{sym} | {name} ({exch})")
+        return results
+    except Exception:
+        return []
+
 def render_styled_ledger(data_list):
     """Transforms raw dictionary lists into Bloomberg-style financial ledgers"""
     if not data_list:
@@ -22,7 +45,6 @@ def render_styled_ledger(data_list):
     df = pd.DataFrame(data_list)
     year_cols = [col for col in df.columns if col != "Accounting Metric"]
     
-    # 1. Apply typography: Left-align labels, Right-align monospace numbers
     styler = df.style\
         .set_properties(subset=["Accounting Metric"], **{
             'text-align': 'left', 
@@ -34,7 +56,6 @@ def render_styled_ledger(data_list):
             'font-size': '14px'
         })
         
-    # 2. Apply theme-agnostic highlighting to headline financial totals
     def highlight_headline_metrics(row):
         metric = str(row["Accounting Metric"]).lower()
         headline_terms = [
@@ -43,13 +64,11 @@ def render_styled_ledger(data_list):
             "net cash flow", "operating activity"
         ]
         if any(term in metric for term in headline_terms):
-            # Creates a subtle bold highlight bar across the entire row
             return ['background-color: rgba(128, 128, 128, 0.15); font-weight: 700;' for _ in row]
         return ['' for _ in row]
         
     styler.apply(highlight_headline_metrics, axis=1)
     
-    # 3. Dynamic height calculation to eliminate awkward inner scrollbars
     calc_height = (len(df) * 38) + 42
     
     st.dataframe(
@@ -68,56 +87,34 @@ if 'watchlist' not in st.session_state:
         "TATAMOTORS": "Tata Motors"
     }
 
-# --- 4. Sidebar Setup ---
-# --- 4. Sidebar Setup ---
+# --- 4. Sidebar Setup (Live API Autocomplete) ---
 with st.sidebar:
-    # 1. Master Stock Directory (Shared by both Market Search & Add to Watchlist)
-    # You can add as many NSE/BSE companies here as you want!
-    NSE_DIRECTORY = {
-        "RELIANCE": "Reliance Industries Ltd",
-        "TCS": "Tata Consultancy Services",
-        "HDFCBANK": "HDFC Bank Ltd",
-        "INFY": "Infosys Ltd",
-        "ICICIBANK": "ICICI Bank Ltd",
-        "HINDUNILVR": "Hindustan Unilever Ltd",
-        "SBIN": "State Bank of India",
-        "BHARTIARTL": "Bharti Airtel Ltd",
-        "ITC": "ITC Ltd",
-        "KOTAKBANK": "Kotak Mahindra Bank",
-        "LT": "Larsen & Toubro Ltd",
-        "TATAMOTORS": "Tata Motors Ltd",
-        "AXISBANK": "Axis Bank Ltd",
-        "ADANIENT": "Adani Enterprises",
-        "MARUTI": "Maruti Suzuki India",
-        "SUNPHARMA": "Sun Pharmaceutical",
-        "TITAN": "Titan Company Ltd",
-        "BAJFINANCE": "Bajaj Finance Ltd",
-        "WIPRO": "Wipro Ltd",
-        "ZOMATO": "Zomato Ltd",
-        "WAAREERTL": "Waaree Renewable Technologies",
-        "NORTHARC": "Northern Arc Capital"
-    }
-    
-    # Format into searchable strings: "RELIANCE | Reliance Industries Ltd"
-    search_options = [f"{ticker} | {name}" for ticker, name in NSE_DIRECTORY.items()]
-
     st.header("Market Search")
+    st.caption("Live Global & Indian Market Search")
     
-    # Market Search Autocomplete Box
-    selected_option = st.selectbox(
-        "Search Company or Ticker:",
-        options=search_options,
-        index=None,  # Keeps box empty by default
-        placeholder="Type company name (e.g. Tata, HDFC)..."
-    )
+    # Step 1: User types any company name
+    search_query = st.text_input(
+        "Type Company Name or Symbol:", 
+        value="", 
+        placeholder="e.g. Tata Power, Zomato, Apple..."
+    ).strip()
     
-    if selected_option:
-        display_ticker = selected_option.split(" | ")[0]
-        ticker_input = f"{display_ticker}.NS"
-    else:
-        display_ticker = ""
-        ticker_input = ""
-        
+    ticker_input = ""
+    display_ticker = ""
+    
+    # Step 2: Instantly fetch live matching stocks from exchange API
+    if search_query:
+        suggestions = fetch_live_suggestions(search_query)
+        if suggestions:
+            chosen_asset = st.selectbox("Select exact match:", options=suggestions, key="search_select")
+            if chosen_asset:
+                # Extract ticker and clean display name automatically
+                parts = chosen_asset.split(" | ")
+                ticker_input = parts[0].strip()
+                display_ticker = ticker_input.replace(".NS", "").replace(".BO", "")
+        else:
+            st.warning("No listed exchange matches found.")
+            
     fetch_button = st.button("Analyze Stock", type="primary", use_container_width=True)
     
     st.divider()
@@ -137,27 +134,22 @@ with st.sidebar:
     st.write("")
     
     with st.expander("+ Add New Asset"):
-        # Watchlist Autocomplete Box (Reuses the same search_options!)
-        selected_add = st.selectbox(
-            "Search & Select Company to Add:",
-            options=search_options,
-            index=None,
-            placeholder="Type name to add...",
-            key="add_asset_select"
-        )
-        
-        if st.button("Add to Watchlist", use_container_width=True):
-            if selected_add:
-                # Automatically split "TICKER | Company Name" into separate variables
-                parts = selected_add.split(" | ")
-                clean_ticker = parts[0]
-                clean_name = parts[1]
-                
-                # Save into session state and reload UI
-                st.session_state.watchlist[clean_ticker] = clean_name
-                st.rerun()
+        add_query = st.text_input("Search Company to Add:", value="", placeholder="e.g. Infosys, ITC...", key="add_q").strip()
+        if add_query:
+            add_suggestions = fetch_live_suggestions(add_query)
+            if add_suggestions:
+                chosen_add = st.selectbox("Select match to add:", options=add_suggestions, key="add_select")
+                if st.button("Add to Watchlist", use_container_width=True):
+                    if chosen_add:
+                        parts = chosen_add.split(" | ")
+                        clean_t = parts[0].replace(".NS", "").replace(".BO", "").strip()
+                        # Extracts clean name without exchange tag
+                        clean_n = parts[1].split(" (")[0].strip() if len(parts) > 1 else clean_t
+                        st.session_state.watchlist[clean_t] = clean_n
+                        st.rerun()
             else:
-                st.warning("Please select a company from the list.")
+                st.warning("No matches found.")
+
 # --- 5. Terminal Navigation Tabs ---
 tab_single, tab_compare, tab_stmts = st.tabs(["Single Stock Analysis", "Company Comparison", "Financial Statements"])
 
@@ -321,7 +313,6 @@ with tab_stmts:
                     )
                     st.write("")
                     
-                    # Apply institutional rendering to chosen ledger
                     if stmt_choice == "Income Statement (P&L)":
                         render_styled_ledger(stmts.get("income_statement", []))
                     elif stmt_choice == "Balance Sheet":
